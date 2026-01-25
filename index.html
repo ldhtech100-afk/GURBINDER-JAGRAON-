@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VLE Card Issue Dashboard</title>
+
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      margin: 20px;
+    }
+    .kpi {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 300px;
+      font-size: 22px;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+  </style>
+
+  <script>
+    google.charts.load('current', {packages:['table']});
+    google.charts.setOnLoadCallback(drawDashboard);
+
+    function drawDashboard() {
+
+      const sheetId = "179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E";
+      const gid = "1247592058";
+
+      const query = new google.visualization.Query(
+        `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?gid=${gid}`
+      );
+
+      query.send(handleResponse);
+    }
+
+    function handleResponse(response) {
+      const data = response.getDataTable();
+      const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
+      let totalCards = 0;
+      let vleTotals = {};
+      let notFilledToday = [];
+
+      // find today's column
+      let todayCol = -1;
+      for (let c = 0; c < data.getNumberOfColumns(); c++) {
+        if (data.getColumnLabel(c).includes(today)) {
+          todayCol = c;
+          break;
+        }
+      }
+
+      for (let r = 0; r < data.getNumberOfRows(); r++) {
+        const vleName = data.getValue(r, 2);
+        const vleContact = data.getValue(r, 3);
+
+        let rowTotal = 0;
+
+        for (let c = 7; c < data.getNumberOfColumns(); c++) {
+          const val = data.getValue(r, c);
+          if (val) {
+            rowTotal += Number(val);
+            totalCards += Number(val);
+          }
+        }
+
+        vleTotals[vleName] = (vleTotals[vleName] || 0) + rowTotal;
+
+        if (todayCol !== -1 && !data.getValue(r, todayCol)) {
+          notFilledToday.push([vleName, vleContact]);
+        }
+      }
+
+      document.getElementById("totalCards").innerText = totalCards;
+
+      drawTop3(vleTotals);
+      drawNotFilled(notFilledToday);
+    }
+
+    function drawTop3(vleTotals) {
+      const arr = [['VLE Name', 'Total Cards']];
+      Object.entries(vleTotals)
+        .sort((a,b) => b[1] - a[1])
+        .slice(0,3)
+        .forEach(i => arr.push(i));
+
+      const table = new google.visualization.Table(document.getElementById('top3'));
+      table.draw(google.visualization.arrayToDataTable(arr));
+    }
+
+    function drawNotFilled(list) {
+      const arr = [['VLE Name', 'Contact Number'], ...list];
+      const table = new google.visualization.Table(document.getElementById('notFilled'));
+      table.draw(google.visualization.arrayToDataTable(arr));
+    }
+  </script>
+</head>
+
+<body>
+
+  <h1>📊 VLE Card Issue Dashboard</h1>
+
+  <div class="kpi">
+    Total Cards Issued Till Today<br>
+    <span id="totalCards">0</span>
+  </div>
+
+  <div class="section">
+    <h3>🏆 Top 3 VLEs by Card Issued</h3>
+    <div id="top3"></div>
+  </div>
+
+  <div class="section">
+    <h3>🚫 VLEs Who Did Not Submit Today</h3>
+    <div id="notFilled"></div>
+  </div>
+
+</body>
+</html>
