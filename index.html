@@ -103,8 +103,17 @@
       const dateCell = sheetData.getValue(r, selectedDateCol);
       const num = Number(dateCell);
 
-      if (dateCell === null || dateCell === "" || isNaN(num)) {
-        notFilled.push([vleName, vleContact]);
+      const raw = sheetData.getValue(r, selectedDateCol);
+      const formatted = sheetData.getFormattedValue(r, selectedDateCol);
+
+const isTrulyEmpty =
+  raw === null &&
+  (formatted === null || formatted === "");
+
+if (isTrulyEmpty) {
+  notFilled.push([vleName, vleContact]);
+}
+
       }
     }
 
