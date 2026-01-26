@@ -1,143 +1,315 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>VLE Cards Dashboard</title>
-  <script src="https://www.gstatic.com/charts/loader.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; background:#f4f6f8; margin:20px; }
-    .card { background:#fff; padding:16px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,.1); }
-    h2 { margin:0 0 10px; }
-    table { width:100%; border-collapse:collapse; }
-    th, td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
-    th { background:#eef3f8; }
-    select { padding:6px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLE Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Visualization API -->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .stat-card { transition: transform 0.2s ease-in-out; }
+        .stat-card:hover { transform: translateY(-2px); }
+        #loader { border-top-color: #3b82f6; }
+    </style>
 </head>
-<body>
+<body class="bg-slate-50 min-h-screen text-slate-900">
 
-<div class="card">
-  <h2>Total Cards Issued</h2>
-  <h1 id="totalCards">0</h1>
-</div>
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-800">VLE Performance</h1>
+            </div>
+            <div id="refresh-btn" class="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Sync Data
+            </div>
+        </div>
+    </header>
 
-<div class="card">
-  <h2>🏆 Top 3 VLEs (All Dates)</h2>
-  <table id="topVleTable">
-    <tr><th>VLE Name</th><th>Total Cards</th></tr>
-  </table>
-</div>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="fixed inset-0 bg-slate-50/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+            <div id="loader" class="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-blue-600 mb-4"></div>
+            <p class="text-slate-600 font-medium animate-pulse">Fetching Spreadsheet Data...</p>
+        </div>
 
-<div class="card">
-  <h2>🚫 VLEs Who Did Not Fill Form</h2>
-  <label>Select Date: </label>
-  <select id="dateSelect"></select>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Metric 1: Total Cards Overall -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 stat-card">
+                <p class="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Total Cards Issued</p>
+                <div class="flex items-baseline">
+                    <h2 id="overall-total" class="text-4xl font-bold text-slate-900 leading-none">0</h2>
+                </div>
+                <p class="mt-2 text-xs text-slate-400">Sum of all numeric entries across all dates</p>
+            </div>
 
-  <table id="notFilledTable" style="margin-top:10px">
-    <tr><th>VLE Name</th><th>Contact Number</th></tr>
-  </table>
-</div>
+            <!-- Top 3 Leaderboard -->
+            <div class="md:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-semibold text-slate-800">Top 3 Performing VLEs</h3>
+                    <span class="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-1 rounded uppercase tracking-wide">Elite Performers</span>
+                </div>
+                <div id="top-vle-container" class="divide-y divide-slate-100 min-h-[140px]">
+                    <!-- Top 3 rows populated here -->
+                </div>
+            </div>
+        </div>
 
-<script>
-  google.charts.load('current', { packages:['table'] });
-  google.charts.setOnLoadCallback(init);
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-lg">Incomplete Reports</h3>
+                    <p class="text-sm text-slate-500">VLEs who have not submitted data for the selected date.</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label for="date-selector" class="text-sm font-medium text-slate-600">Date:</label>
+                    <select id="date-selector" class="bg-slate-100 border-none text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 font-semibold cursor-pointer">
+                        <option value="">Select Date</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-slate-500">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th scope="col" class="px-6 py-4 font-semibold">VLE Name</th>
+                            <th scope="col" class="px-6 py-4 font-semibold">Contact Number</th>
+                            <th scope="col" class="px-6 py-4 font-semibold text-right">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="not-filled-body">
+                        <!-- Table rows populated here -->
+                    </tbody>
+                </table>
+                <div id="no-data-msg" class="hidden p-12 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="text-slate-400 font-medium text-lg italic">Great! Everyone filled the form for this date.</p>
+                </div>
+            </div>
+        </div>
+    </main>
 
-  const SHEET_URL = "https://docs.google.com/spreadsheets/d/179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E/edit?resourcekey=&gid=1247592058#gid=1247592058";
-  const DATA_START_COL = 7; // Column H (26 Jan)
+    <script type="text/javascript">
+        // Spreadsheet Configuration
+        const SPREADSHEET_ID = '179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E';
+        const GID = '1247592058';
+        const QUERY_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?gid=${GID}`;
 
-  let sheetData;
+        // Global State
+        let rawData = null;
+        let dateColumns = []; // [{label: '26 Jan', index: 7}, ...]
 
-  function init() {
-    const query = new google.visualization.Query(SHEET_URL);
-    query.send(res => {
-      sheetData = res.getDataTable();
-      buildDateDropdown();
-      calculateDashboard();
-      document.getElementById("dateSelect").addEventListener("change", calculateDashboard);
-    });
-  }
+        // Load Visualization API
+        google.charts.load('current', {'packages':['corechart', 'table']});
+        google.charts.setOnLoadCallback(fetchData);
 
-  function buildDateDropdown() {
-    const select = document.getElementById("dateSelect");
-    select.innerHTML = "";
-
-    for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
-      const opt = document.createElement("option");
-      opt.value = c;
-      opt.text = sheetData.getColumnLabel(c);
-      select.appendChild(opt);
-    }
-
-    // force default = first date (H)
-    select.selectedIndex = 0;
-  }
-
-  function calculateDashboard() {
-    let totalCards = 0;
-    let vleTotals = [];
-    let notFilled = [];
-
-    const selectedDateCol = Number(document.getElementById("dateSelect").value);
-
-    for (let r = 0; r < sheetData.getNumberOfRows(); r++) {
-      const vleName = sheetData.getValue(r, 2); // VLE Name
-      const vleContact = sheetData.getValue(r, 3);
-
-      // ✅ skip invalid / empty rows
-      if (!vleName || vleName.toString().trim() === "") continue;
-
-      let rowTotal = 0;
-
-      // calculate totals (H onwards, include H)
-      for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
-        const val = sheetData.getValue(r, c);
-        if (val !== null && val !== "" && !isNaN(val)) {
-          rowTotal += Number(val);
-          totalCards += Number(val);
+        async function fetchData() {
+            showLoading(true);
+            const query = new google.visualization.Query(QUERY_URL);
+            
+            query.send(handleQueryResponse);
         }
-      }
 
-      vleTotals.push([vleName, rowTotal]);
+        function handleQueryResponse(response) {
+            if (response.isError()) {
+                console.error('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+                showError("Could not connect to Google Sheet. Please check sharing permissions.");
+                showLoading(false);
+                return;
+            }
 
-      // not-filled logic
-      const dateCell = sheetData.getValue(r, selectedDateCol);
-      const num = Number(dateCell);
+            rawData = response.getDataTable();
+            processData();
+            showLoading(false);
+        }
 
-      const raw = sheetData.getValue(r, selectedDateCol);
-      const formatted = sheetData.getFormattedValue(r, selectedDateCol);
+        function processData() {
+            const numRows = rawData.getNumberOfRows();
+            const numCols = rawData.getNumberOfColumns();
 
-const isTrulyEmpty =
-  raw === null &&
-  (formatted === null || formatted === "");
+            let overallTotal = 0;
+            let vlePerformance = [];
+            dateColumns = [];
 
-if (isTrulyEmpty) {
-  notFilled.push([vleName, vleContact]);
-}
+            // 1. Identify Date Columns (H starts at index 7)
+            for (let c = 7; c < numCols; c++) {
+                let label = rawData.getColumnLabel(c);
+                if (label) {
+                    dateColumns.push({ label, index: c });
+                }
+            }
 
-      }
-    }
+            // 2. Iterate Rows
+            for (let r = 0; r < numRows; r++) {
+                const vleName = rawData.getValue(r, 2); // Column C
+                const contact = rawData.getFormattedValue(r, 3); // Column D
 
-    // update total cards
-    document.getElementById("totalCards").innerText = totalCards.toLocaleString();
+                // Skip rows where VLE Name is empty or blank
+                if (!vleName || vleName.toString().trim() === "") continue;
 
-    // Top 3 VLEs
-    vleTotals.sort((a,b) => b[1] - a[1]);
-    const topTable = document.getElementById("topVleTable");
-    topTable.innerHTML = "<tr><th>VLE Name</th><th>Total Cards</th></tr>";
+                let vleTotal = 0;
 
-    vleTotals.slice(0,3).forEach(r => {
-      topTable.innerHTML += `<tr><td>${r[0]}</td><td>${r[1].toLocaleString()}</td></tr>`;
-    });
+                // Loop through H onwards
+                for (let c = 7; c < numCols; c++) {
+                    const val = rawData.getValue(r, c);
+                    if (val !== null && typeof val === 'number') {
+                        vleTotal += val;
+                        overallTotal += val;
+                    }
+                }
 
-    // Not Filled table
-    const nfTable = document.getElementById("notFilledTable");
-    nfTable.innerHTML = "<tr><th>VLE Name</th><th>Contact Number</th></tr>";
+                vlePerformance.push({
+                    name: vleName,
+                    contact: contact,
+                    total: vleTotal,
+                    rowIndex: r
+                });
+            }
 
-    notFilled.forEach(r => {
-      nfTable.innerHTML += `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`;
-    });
-  }
-</script>
+            // 3. Update UI - Overall Total
+            document.getElementById('overall-total').innerText = overallTotal.toLocaleString();
 
+            // 4. Update UI - Top 3
+            vlePerformance.sort((a, b) => b.total - a.total);
+            renderTopVLEs(vlePerformance.slice(0, 3));
+
+            // 5. Update Date Selector
+            updateDateSelector();
+            
+            // Set initial selected date to the latest one
+            if (dateColumns.length > 0) {
+                const selector = document.getElementById('date-selector');
+                selector.value = dateColumns[dateColumns.length - 1].index;
+                updateNotFilledTable(parseInt(selector.value));
+            }
+        }
+
+        function renderTopVLEs(top3) {
+            const container = document.getElementById('top-vle-container');
+            container.innerHTML = '';
+
+            top3.forEach((vle, idx) => {
+                const rankColor = idx === 0 ? 'text-amber-500' : (idx === 1 ? 'text-slate-400' : 'text-amber-700');
+                const html = `
+                    <div class="px-6 py-4 flex items-center justify-between group hover:bg-slate-50 transition-colors">
+                        <div class="flex items-center space-x-4">
+                            <span class="text-2xl font-black ${rankColor} italic w-6">${idx + 1}</span>
+                            <div>
+                                <p class="font-bold text-slate-800">${vle.name}</p>
+                                <p class="text-xs text-slate-400">${vle.contact || 'No contact'}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-lg font-bold text-slate-900">${vle.total}</span>
+                            <span class="block text-[10px] text-slate-400 uppercase font-bold tracking-tight">Total Cards</span>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+
+        function updateDateSelector() {
+            const selector = document.getElementById('date-selector');
+            selector.innerHTML = '';
+            
+            dateColumns.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col.index;
+                option.text = col.label;
+                selector.appendChild(option);
+            });
+
+            selector.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    updateNotFilledTable(parseInt(e.target.value));
+                }
+            });
+        }
+
+        function updateNotFilledTable(colIndex) {
+            const tbody = document.getElementById('not-filled-body');
+            const noDataMsg = document.getElementById('no-data-msg');
+            tbody.innerHTML = '';
+            
+            let count = 0;
+            const numRows = rawData.getNumberOfRows();
+
+            for (let r = 0; r < numRows; r++) {
+                const vleName = rawData.getValue(r, 2);
+                if (!vleName || vleName.toString().trim() === "") continue;
+
+                const contact = rawData.getFormattedValue(r, 3);
+                
+                // Logic: A VLE is "Not Filled" ONLY IF:
+                // getValue(row, col) === null AND getFormattedValue(row, col) is empty
+                const cellValue = rawData.getValue(r, colIndex);
+                const cellFormatted = rawData.getFormattedValue(r, colIndex);
+
+                const isNotFilled = (cellValue === null && cellFormatted === "");
+
+                if (isNotFilled) {
+                    count++;
+                    const row = `
+                        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                            <td class="px-6 py-4 font-medium text-slate-900">${vleName}</td>
+                            <td class="px-6 py-4 text-slate-500 font-mono text-xs">${contact || '---'}</td>
+                            <td class="px-6 py-4 text-right">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    <span class="w-1 h-1 mr-1.5 rounded-full bg-red-400"></span>
+                                    Missing
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                }
+            }
+
+            if (count === 0) {
+                noDataMsg.classList.remove('hidden');
+                tbody.closest('table').classList.add('hidden');
+            } else {
+                noDataMsg.classList.add('hidden');
+                tbody.closest('table').classList.remove('hidden');
+            }
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = show ? 'flex' : 'none';
+        }
+
+        function showError(msg) {
+            const container = document.body;
+            const errorDiv = document.createElement('div');
+            errorDiv.className = "fixed top-5 right-5 bg-red-50 border-l-4 border-red-500 p-4 shadow-lg z-[100] max-w-sm";
+            errorDiv.innerHTML = `
+                <div class="flex">
+                    <div class="ml-3">
+                        <p class="text-sm text-red-700 font-bold">Data Error</p>
+                        <p class="text-xs text-red-600">${msg}</p>
+                    </div>
+                </div>
+            `;
+            container.appendChild(errorDiv);
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+
+        document.getElementById('refresh-btn').onclick = fetchData;
+    </script>
 </body>
 </html>
