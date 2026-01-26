@@ -40,7 +40,7 @@
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="fixed inset-0 bg-slate-50/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
             <div id="loader" class="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-blue-600 mb-4"></div>
-            <p class="text-slate-600 font-medium animate-pulse">Fetching Spreadsheet Data...</p>
+            <p id="loading-text" class="text-slate-600 font-medium animate-pulse">Fetching Spreadsheet Data...</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -80,7 +80,7 @@
             </div>
             
             <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left text-slate-500">
+                <table id="not-filled-table" class="w-full text-sm text-left text-slate-500">
                     <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
                         <tr>
                             <th scope="col" class="px-6 py-4 font-semibold">VLE Name</th>
@@ -106,27 +106,27 @@
         // Spreadsheet Configuration
         const SPREADSHEET_ID = '179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E';
         const GID = '1247592058';
-        const QUERY_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?gid=${GID}`;
+        // Force headers=1 to ensure Row 1 is treated as column labels
+        const QUERY_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?gid=${GID}&headers=1`;
 
         // Global State
         let rawData = null;
-        let dateColumns = []; // [{label: '26 Jan', index: 7}, ...]
+        let dateColumns = []; 
 
         // Load Visualization API
         google.charts.load('current', {'packages':['corechart', 'table']});
         google.charts.setOnLoadCallback(fetchData);
 
         async function fetchData() {
-            showLoading(true);
+            showLoading(true, "Syncing spreadsheet data...");
             const query = new google.visualization.Query(QUERY_URL);
-            
             query.send(handleQueryResponse);
         }
 
         function handleQueryResponse(response) {
             if (response.isError()) {
                 console.error('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
-                showError("Could not connect to Google Sheet. Please check sharing permissions.");
+                showError("Access Denied. Ensure the Google Sheet is shared as 'Anyone with the link can view'.");
                 showLoading(false);
                 return;
             }
@@ -137,6 +137,8 @@
         }
 
         function processData() {
+            if (!rawData) return;
+            
             const numRows = rawData.getNumberOfRows();
             const numCols = rawData.getNumberOfColumns();
 
@@ -144,11 +146,21 @@
             let vlePerformance = [];
             dateColumns = [];
 
-            // 1. Identify Date Columns (H starts at index 7)
+            // 1. Identify Date Columns (H onwards, index 7)
             for (let c = 7; c < numCols; c++) {
                 let label = rawData.getColumnLabel(c);
-                if (label) {
+                
+                // Fallback: If label is empty or just the column letter, try to see if Row 0 (data) looks like a date
+                // However, with headers=1, getColumnLabel usually works correctly.
+                if (label && label.length > 0 && !/^[A-Z]$/.test(label)) {
                     dateColumns.push({ label, index: c });
+                } else {
+                    // If label is just a column letter (A, B, C...), the API failed to find the header row
+                    // We check if the data table has a label anyway
+                    let potentialLabel = rawData.getFormattedValue(0, c);
+                    if (potentialLabel && potentialLabel !== "null") {
+                         // Note: If we use headers=1, this shouldn't be necessary, but good for robustness
+                    }
                 }
             }
 
@@ -157,12 +169,12 @@
                 const vleName = rawData.getValue(r, 2); // Column C
                 const contact = rawData.getFormattedValue(r, 3); // Column D
 
-                // Skip rows where VLE Name is empty or blank
-                if (!vleName || vleName.toString().trim() === "") continue;
+                // Skip rows where VLE Name is empty, blank, or matches the header string "VLE Name"
+                if (!vleName || vleName.toString().trim() === "" || vleName.toString().toLowerCase() === "vle name") continue;
 
                 let vleTotal = 0;
 
-                // Loop through H onwards
+                // Loop through columns H onwards
                 for (let c = 7; c < numCols; c++) {
                     const val = rawData.getValue(r, c);
                     if (val !== null && typeof val === 'number') {
@@ -192,14 +204,22 @@
             // Set initial selected date to the latest one
             if (dateColumns.length > 0) {
                 const selector = document.getElementById('date-selector');
-                selector.value = dateColumns[dateColumns.length - 1].index;
-                updateNotFilledTable(parseInt(selector.value));
+                const lastDateIndex = dateColumns[dateColumns.length - 1].index;
+                selector.value = lastDateIndex;
+                updateNotFilledTable(lastDateIndex);
+            } else {
+                showError("No date columns found from Column H onwards.");
             }
         }
 
         function renderTopVLEs(top3) {
             const container = document.getElementById('top-vle-container');
             container.innerHTML = '';
+
+            if (top3.length === 0) {
+                container.innerHTML = '<div class="p-8 text-center text-slate-400 italic">No data available</div>';
+                return;
+            }
 
             top3.forEach((vle, idx) => {
                 const rankColor = idx === 0 ? 'text-amber-500' : (idx === 1 ? 'text-slate-400' : 'text-amber-700');
@@ -226,6 +246,13 @@
             const selector = document.getElementById('date-selector');
             selector.innerHTML = '';
             
+            if (dateColumns.length === 0) {
+                const opt = document.createElement('option');
+                opt.text = "No dates found";
+                selector.appendChild(opt);
+                return;
+            }
+
             dateColumns.forEach(col => {
                 const option = document.createElement('option');
                 option.value = col.index;
@@ -233,7 +260,11 @@
                 selector.appendChild(option);
             });
 
-            selector.addEventListener('change', (e) => {
+            // Re-bind listener (removes old ones if any by replacement)
+            const newSelector = selector.cloneNode(true);
+            selector.parentNode.replaceChild(newSelector, selector);
+            
+            newSelector.addEventListener('change', (e) => {
                 if (e.target.value) {
                     updateNotFilledTable(parseInt(e.target.value));
                 }
@@ -243,6 +274,7 @@
         function updateNotFilledTable(colIndex) {
             const tbody = document.getElementById('not-filled-body');
             const noDataMsg = document.getElementById('no-data-msg');
+            const table = document.getElementById('not-filled-table');
             tbody.innerHTML = '';
             
             let count = 0;
@@ -250,15 +282,14 @@
 
             for (let r = 0; r < numRows; r++) {
                 const vleName = rawData.getValue(r, 2);
-                if (!vleName || vleName.toString().trim() === "") continue;
+                if (!vleName || vleName.toString().trim() === "" || vleName.toString().toLowerCase() === "vle name") continue;
 
                 const contact = rawData.getFormattedValue(r, 3);
                 
-                // Logic: A VLE is "Not Filled" ONLY IF:
-                // getValue(row, col) === null AND getFormattedValue(row, col) is empty
                 const cellValue = rawData.getValue(r, colIndex);
                 const cellFormatted = rawData.getFormattedValue(r, colIndex);
 
+                // STRICT LOGIC: null value AND empty formatted string means not filled
                 const isNotFilled = (cellValue === null && cellFormatted === "");
 
                 if (isNotFilled) {
@@ -281,15 +312,17 @@
 
             if (count === 0) {
                 noDataMsg.classList.remove('hidden');
-                tbody.closest('table').classList.add('hidden');
+                table.classList.add('hidden');
             } else {
                 noDataMsg.classList.add('hidden');
-                tbody.closest('table').classList.remove('hidden');
+                table.classList.remove('hidden');
             }
         }
 
-        function showLoading(show) {
+        function showLoading(show, text = "Fetching Spreadsheet Data...") {
             const overlay = document.getElementById('loading-overlay');
+            const loadingText = document.getElementById('loading-text');
+            loadingText.innerText = text;
             overlay.style.display = show ? 'flex' : 'none';
         }
 
@@ -300,13 +333,13 @@
             errorDiv.innerHTML = `
                 <div class="flex">
                     <div class="ml-3">
-                        <p class="text-sm text-red-700 font-bold">Data Error</p>
+                        <p class="text-sm text-red-700 font-bold">Connection Issue</p>
                         <p class="text-xs text-red-600">${msg}</p>
                     </div>
                 </div>
             `;
             container.appendChild(errorDiv);
-            setTimeout(() => errorDiv.remove(), 5000);
+            setTimeout(() => errorDiv.remove(), 6000);
         }
 
         document.getElementById('refresh-btn').onclick = fetchData;
