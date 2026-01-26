@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>VLE Card Issue Dashboard</title>
 
+  <!-- Google Charts -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 
   <style>
@@ -11,22 +13,19 @@
       background: #f2f4f7;
       padding: 20px;
     }
-
     h1 {
-      margin-bottom: 10px;
+      margin-bottom: 15px;
     }
-
     .kpi {
       background: #ffffff;
       padding: 20px;
-      width: 300px;
+      width: 320px;
       border-radius: 10px;
       font-size: 22px;
       font-weight: bold;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
       margin-bottom: 25px;
     }
-
     .section {
       background: #ffffff;
       padding: 20px;
@@ -34,7 +33,6 @@
       margin-bottom: 25px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
-
     select {
       padding: 6px;
       margin-bottom: 10px;
@@ -45,19 +43,20 @@
     google.charts.load('current', { packages: ['table'] });
     google.charts.setOnLoadCallback(loadData);
 
-    let globalData = null;
-
-    // 🔧 CONFIG — CHANGE ONLY THIS IF SHEET CHANGES
+    // ================= CONFIG =================
     const SHEET_ID = "179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E";
     const GID = "1247592058";
     const DATA_START_COL = 7; // Column H (0-based)
+    // ==========================================
+
+    let sheetData = null;
 
     function loadData() {
       const query = new google.visualization.Query(
         `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}`
       );
       query.send(response => {
-        globalData = response.getDataTable();
+        sheetData = response.getDataTable();
         buildDateDropdown();
         calculateDashboard();
       });
@@ -65,18 +64,18 @@
 
     function buildDateDropdown() {
       const select = document.getElementById("dateSelect");
+      select.innerHTML = "";
 
-      for (let c = DATA_START_COL; c < globalData.getNumberOfColumns(); c++) {
-        const label = globalData.getColumnLabel(c);
+      for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
         const option = document.createElement("option");
         option.value = c;
-        option.text = label;
+        option.text = sheetData.getColumnLabel(c);
         select.appendChild(option);
       }
     }
 
     function calculateDashboard() {
-      const data = globalData;
+      const data = sheetData;
       const selectedDateCol = parseInt(document.getElementById("dateSelect").value);
 
       let totalCards = 0;
@@ -90,19 +89,23 @@
 
         let rowTotal = 0;
 
-        // ✅ TOTAL & ROW TOTAL — ALL COLUMNS AFTER H
+        // ✅ SUM ALL VALUES FROM COLUMN H ONWARDS
         for (let c = DATA_START_COL; c < data.getNumberOfColumns(); c++) {
           const val = data.getValue(r, c);
-          if (typeof val === "number") {
-            rowTotal += val;
-            totalCards += val;
+          if (val !== null && val !== "") {
+            const num = Number(val);
+            if (!isNaN(num)) {
+              rowTotal += num;
+              totalCards += num;
+            }
           }
         }
 
         vleTotals.push([vleName, rowTotal]);
 
-        // ✅ NOT FILLED LOGIC (SELECTED DATE COLUMN)
-        if (data.getValue(r, selectedDateCol) === null) {
+        // ✅ NOT FILLED LOGIC (EMPTY OR NULL)
+        const checkCell = data.getValue(r, selectedDateCol);
+        if (checkCell === null || checkCell === "") {
           notFilled.push([vleName, vleContact]);
         }
       }
@@ -115,11 +118,10 @@
 
     function drawTop3(vleTotals) {
       vleTotals.sort((a, b) => b[1] - a[1]);
-      const top3 = vleTotals.slice(0, 3);
 
       const tableData = google.visualization.arrayToDataTable([
         ["VLE Name", "Total Cards"],
-        ...top3
+        ...vleTotals.slice(0, 3)
       ]);
 
       const table = new google.visualization.Table(
