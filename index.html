@@ -1,130 +1,134 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>VLE Card Issue Dashboard</title>
-
+  <meta charset="utf-8" />
+  <title>VLE Cards Dashboard</title>
   <script src="https://www.gstatic.com/charts/loader.js"></script>
-
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f4f7;
-      padding: 20px;
-    }
-    .kpi, .section {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      margin-bottom: 20px;
-    }
+    body { font-family: Arial, sans-serif; background:#f4f6f8; margin:20px; }
+    .card { background:#fff; padding:16px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,.1); }
+    h2 { margin:0 0 10px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:8px; border-bottom:1px solid #ddd; text-align:left; }
+    th { background:#eef3f8; }
+    select { padding:6px; }
   </style>
-
-  <script>
-    google.charts.load('current', { packages: ['table'] });
-    google.charts.setOnLoadCallback(loadData);
-
-    const SHEET_ID = "179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E";
-    const GID = "1247592058";
-    const DATA_START_COL = 7; // Column H
-
-    let sheetData;
-
-    function loadData() {
-      const query = new google.visualization.Query(
-        `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}`
-      );
-      query.send(res => {
-        sheetData = res.getDataTable();
-        buildDateDropdown();
-        calculate();
-      });
-    }
-
-    function buildDateDropdown() {
-      const select = document.getElementById("dateSelect");
-      select.innerHTML = "";
-
-      for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
-        const opt = document.createElement("option");
-        opt.value = c;
-        opt.text = sheetData.getColumnLabel(c);
-        select.appendChild(opt);
-      }
-
-      select.selectedIndex = 0; // default = 26 Jan
-    }
-
-    function calculate() {
-      const selectedDateCol = Number(document.getElementById("dateSelect").value);
-
-      let totalCards = 0;
-      let vleTotals = [];
-      let notFilled = [];
-
-      for (let r = 0; r < sheetData.getNumberOfRows(); r++) {
-
-        const vleName = sheetData.getValue(r, 2);
-        const vleContact = sheetData.getValue(r, 3);
-
-        let rowTotal = 0;
-
-        // ✅ TOTAL & TOP-3 LOGIC
-        for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
-          const val = sheetData.getValue(r, c);
-          if (val !== null && val !== "" && !isNaN(val)) {
-            rowTotal += Number(val);
-            totalCards += Number(val);
-          }
-        }
-
-        vleTotals.push([vleName, rowTotal]);
-
-        // ✅ NOT FILLED LOGIC (FINAL & CORRECT)
-        const dateCell = sheetData.getValue(r, selectedDateCol);
-        if (dateCell === null || dateCell === "") {
-          notFilled.push([vleName, vleContact]);
-        }
-      }
-
-      document.getElementById("totalCards").innerText = totalCards;
-
-      vleTotals.sort((a, b) => b[1] - a[1]);
-      drawTable("top3", ["VLE Name", "Total Cards"], vleTotals.slice(0, 3));
-      drawTable("notFilled", ["VLE Name", "Contact Number"], notFilled);
-    }
-
-    function drawTable(id, headers, rows) {
-      const table = new google.visualization.Table(document.getElementById(id));
-      table.draw(
-        google.visualization.arrayToDataTable([headers, ...rows]),
-        { width: "100%" }
-      );
-    }
-  </script>
 </head>
-
 <body>
 
-  <h1>📊 VLE Card Issue Dashboard</h1>
+<div class="card">
+  <h2>Total Cards Issued</h2>
+  <h1 id="totalCards">0</h1>
+</div>
 
-  <div class="kpi">
-    <b>Total Cards Issued</b><br>
-    <span id="totalCards">0</span>
-  </div>
+<div class="card">
+  <h2>🏆 Top 3 VLEs (All Dates)</h2>
+  <table id="topVleTable">
+    <tr><th>VLE Name</th><th>Total Cards</th></tr>
+  </table>
+</div>
 
-  <div class="section">
-    <h3>🏆 Top 3 VLEs (All Dates)</h3>
-    <div id="top3"></div>
-  </div>
+<div class="card">
+  <h2>🚫 VLEs Who Did Not Fill Form</h2>
+  <label>Select Date: </label>
+  <select id="dateSelect"></select>
 
-  <div class="section">
-    <h3>🚫 VLEs Who Did Not Fill Form</h3>
-    Select Date:
-    <select id="dateSelect" onchange="calculate()"></select>
-    <div id="notFilled"></div>
-  </div>
+  <table id="notFilledTable" style="margin-top:10px">
+    <tr><th>VLE Name</th><th>Contact Number</th></tr>
+  </table>
+</div>
+
+<script>
+  google.charts.load('current', { packages:['table'] });
+  google.charts.setOnLoadCallback(init);
+
+  const SHEET_URL = "PASTE_YOUR_GOOGLE_SHEET_URL_HERE";
+  const DATA_START_COL = 7; // Column H (26 Jan)
+
+  let sheetData;
+
+  function init() {
+    const query = new google.visualization.Query(SHEET_URL);
+    query.send(res => {
+      sheetData = res.getDataTable();
+      buildDateDropdown();
+      calculateDashboard();
+      document.getElementById("dateSelect").addEventListener("change", calculateDashboard);
+    });
+  }
+
+  function buildDateDropdown() {
+    const select = document.getElementById("dateSelect");
+    select.innerHTML = "";
+
+    for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.text = sheetData.getColumnLabel(c);
+      select.appendChild(opt);
+    }
+
+    // force default = first date (H)
+    select.selectedIndex = 0;
+  }
+
+  function calculateDashboard() {
+    let totalCards = 0;
+    let vleTotals = [];
+    let notFilled = [];
+
+    const selectedDateCol = Number(document.getElementById("dateSelect").value);
+
+    for (let r = 0; r < sheetData.getNumberOfRows(); r++) {
+      const vleName = sheetData.getValue(r, 2); // VLE Name
+      const vleContact = sheetData.getValue(r, 3);
+
+      // ✅ skip invalid / empty rows
+      if (!vleName || vleName.toString().trim() === "") continue;
+
+      let rowTotal = 0;
+
+      // calculate totals (H onwards, include H)
+      for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
+        const val = sheetData.getValue(r, c);
+        if (val !== null && val !== "" && !isNaN(val)) {
+          rowTotal += Number(val);
+          totalCards += Number(val);
+        }
+      }
+
+      vleTotals.push([vleName, rowTotal]);
+
+      // not-filled logic
+      const dateCell = sheetData.getValue(r, selectedDateCol);
+      const num = Number(dateCell);
+
+      if (dateCell === null || dateCell === "" || isNaN(num)) {
+        notFilled.push([vleName, vleContact]);
+      }
+    }
+
+    // update total cards
+    document.getElementById("totalCards").innerText = totalCards.toLocaleString();
+
+    // Top 3 VLEs
+    vleTotals.sort((a,b) => b[1] - a[1]);
+    const topTable = document.getElementById("topVleTable");
+    topTable.innerHTML = "<tr><th>VLE Name</th><th>Total Cards</th></tr>";
+
+    vleTotals.slice(0,3).forEach(r => {
+      topTable.innerHTML += `<tr><td>${r[0]}</td><td>${r[1].toLocaleString()}</td></tr>`;
+    });
+
+    // Not Filled table
+    const nfTable = document.getElementById("notFilledTable");
+    nfTable.innerHTML = "<tr><th>VLE Name</th><th>Contact Number</th></tr>";
+
+    notFilled.forEach(r => {
+      nfTable.innerHTML += `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`;
+    });
+  }
+</script>
 
 </body>
 </html>
