@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>VLE Card Issue Dashboard</title>
 
-  <!-- Google Charts -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 
   <style>
@@ -72,6 +71,9 @@
         option.text = sheetData.getColumnLabel(c);
         select.appendChild(option);
       }
+
+      // ✅ FORCE DEFAULT DATE (COLUMN H)
+      select.selectedIndex = 0;
     }
 
     function calculateDashboard() {
@@ -84,12 +86,12 @@
 
       for (let r = 0; r < data.getNumberOfRows(); r++) {
 
-        const vleName = data.getValue(r, 2);    // Column C
-        const vleContact = data.getValue(r, 3); // Column D
+        const vleName = data.getValue(r, 2);     // Column C
+        const vleContact = data.getValue(r, 3);  // Column D
 
         let rowTotal = 0;
 
-        // ✅ SUM ALL VALUES FROM COLUMN H ONWARDS
+        // ✅ TOTAL & ROW TOTAL — ALL COLUMNS FROM H ONWARDS
         for (let c = DATA_START_COL; c < data.getNumberOfColumns(); c++) {
           const val = data.getValue(r, c);
           if (val !== null && val !== "") {
@@ -103,9 +105,15 @@
 
         vleTotals.push([vleName, rowTotal]);
 
-        // ✅ NOT FILLED LOGIC (EMPTY OR NULL)
+        // ✅ NOT FILLED LOGIC (STRICT & CORRECT)
         const checkCell = data.getValue(r, selectedDateCol);
-        if (checkCell === null || checkCell === "") {
+        const checkNum = Number(checkCell);
+
+        if (
+          checkCell === null ||
+          checkCell === "" ||
+          isNaN(checkNum)
+        ) {
           notFilled.push([vleName, vleContact]);
         }
       }
