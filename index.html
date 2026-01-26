@@ -3,108 +3,141 @@
 <head>
   <title>VLE Card Issue Dashboard</title>
 
-  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
 
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f4f6f9;
-      margin: 20px;
-    }
-    .kpi {
-      background: white;
+      background: #f2f4f7;
       padding: 20px;
-      border-radius: 10px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .kpi {
+      background: #ffffff;
+      padding: 20px;
       width: 300px;
+      border-radius: 10px;
       font-size: 22px;
       font-weight: bold;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      margin-bottom: 25px;
     }
+
     .section {
-      background: white;
+      background: #ffffff;
       padding: 20px;
       border-radius: 10px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-bottom: 25px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    select {
+      padding: 6px;
+      margin-bottom: 10px;
     }
   </style>
 
   <script>
-    google.charts.load('current', {packages:['table']});
-    google.charts.setOnLoadCallback(drawDashboard);
+    google.charts.load('current', { packages: ['table'] });
+    google.charts.setOnLoadCallback(loadData);
 
-    function drawDashboard() {
+    let globalData = null;
 
-      const sheetId = "179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E";
-      const gid = "1247592058";
+    // 🔧 CONFIG — CHANGE ONLY THIS IF SHEET CHANGES
+    const SHEET_ID = "179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E";
+    const GID = "1247592058";
+    const DATA_START_COL = 7; // Column H (0-based)
 
+    function loadData() {
       const query = new google.visualization.Query(
-        `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?gid=${gid}`
+        `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}`
       );
-
-      query.send(handleResponse);
+      query.send(response => {
+        globalData = response.getDataTable();
+        buildDateDropdown();
+        calculateDashboard();
+      });
     }
 
-    function handleResponse(response) {
-      const data = response.getDataTable();
-      const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    function buildDateDropdown() {
+      const select = document.getElementById("dateSelect");
+
+      for (let c = DATA_START_COL; c < globalData.getNumberOfColumns(); c++) {
+        const label = globalData.getColumnLabel(c);
+        const option = document.createElement("option");
+        option.value = c;
+        option.text = label;
+        select.appendChild(option);
+      }
+    }
+
+    function calculateDashboard() {
+      const data = globalData;
+      const selectedDateCol = parseInt(document.getElementById("dateSelect").value);
 
       let totalCards = 0;
-      let vleTotals = {};
-      let notFilledToday = [];
-
-      // find today's column
-      let todayCol = -1;
-      for (let c = 0; c < data.getNumberOfColumns(); c++) {
-        if (data.getColumnLabel(c).includes(today)) {
-          todayCol = c;
-          break;
-        }
-      }
+      let vleTotals = [];
+      let notFilled = [];
 
       for (let r = 0; r < data.getNumberOfRows(); r++) {
-        const vleName = data.getValue(r, 2);
-        const vleContact = data.getValue(r, 3);
+
+        const vleName = data.getValue(r, 2);    // Column C
+        const vleContact = data.getValue(r, 3); // Column D
 
         let rowTotal = 0;
 
-        for (let c = 7; c < data.getNumberOfColumns(); c++) {
+        // ✅ TOTAL & ROW TOTAL — ALL COLUMNS AFTER H
+        for (let c = DATA_START_COL; c < data.getNumberOfColumns(); c++) {
           const val = data.getValue(r, c);
-          if (val) {
-            rowTotal += Number(val);
-            totalCards += Number(val);
+          if (typeof val === "number") {
+            rowTotal += val;
+            totalCards += val;
           }
         }
 
-        vleTotals[vleName] = (vleTotals[vleName] || 0) + rowTotal;
+        vleTotals.push([vleName, rowTotal]);
 
-        if (todayCol !== -1 && !data.getValue(r, todayCol)) {
-          notFilledToday.push([vleName, vleContact]);
+        // ✅ NOT FILLED LOGIC (SELECTED DATE COLUMN)
+        if (data.getValue(r, selectedDateCol) === null) {
+          notFilled.push([vleName, vleContact]);
         }
       }
 
       document.getElementById("totalCards").innerText = totalCards;
 
       drawTop3(vleTotals);
-      drawNotFilled(notFilledToday);
+      drawNotFilled(notFilled);
     }
 
     function drawTop3(vleTotals) {
-      const arr = [['VLE Name', 'Total Cards']];
-      Object.entries(vleTotals)
-        .sort((a,b) => b[1] - a[1])
-        .slice(0,3)
-        .forEach(i => arr.push(i));
+      vleTotals.sort((a, b) => b[1] - a[1]);
+      const top3 = vleTotals.slice(0, 3);
 
-      const table = new google.visualization.Table(document.getElementById('top3'));
-      table.draw(google.visualization.arrayToDataTable(arr));
+      const tableData = google.visualization.arrayToDataTable([
+        ["VLE Name", "Total Cards"],
+        ...top3
+      ]);
+
+      const table = new google.visualization.Table(
+        document.getElementById("top3Table")
+      );
+      table.draw(tableData, { width: "100%" });
     }
 
     function drawNotFilled(list) {
-      const arr = [['VLE Name', 'Contact Number'], ...list];
-      const table = new google.visualization.Table(document.getElementById('notFilled'));
-      table.draw(google.visualization.arrayToDataTable(arr));
+      const tableData = google.visualization.arrayToDataTable([
+        ["VLE Name", "Contact Number"],
+        ...list
+      ]);
+
+      const table = new google.visualization.Table(
+        document.getElementById("notFilledTable")
+      );
+      table.draw(tableData, { width: "100%" });
     }
   </script>
 </head>
@@ -114,18 +147,20 @@
   <h1>📊 VLE Card Issue Dashboard</h1>
 
   <div class="kpi">
-    Total Cards Issued Till Today<br>
+    Total Cards Issued<br>
     <span id="totalCards">0</span>
   </div>
 
   <div class="section">
-    <h3>🏆 Top 3 VLEs by Card Issued</h3>
-    <div id="top3"></div>
+    <h3>🏆 Top 3 VLEs (All Dates)</h3>
+    <div id="top3Table"></div>
   </div>
 
   <div class="section">
-    <h3>🚫 VLEs Who Did Not Submit Today</h3>
-    <div id="notFilled"></div>
+    <h3>🚫 VLEs Who Did Not Fill Form</h3>
+    <label>Select Date:</label><br>
+    <select id="dateSelect" onchange="calculateDashboard()"></select>
+    <div id="notFilledTable"></div>
   </div>
 
 </body>
