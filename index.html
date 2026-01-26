@@ -12,29 +12,12 @@
       background: #f2f4f7;
       padding: 20px;
     }
-    h1 {
-      margin-bottom: 15px;
-    }
-    .kpi {
-      background: #ffffff;
-      padding: 20px;
-      width: 320px;
-      border-radius: 10px;
-      font-size: 22px;
-      font-weight: bold;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      margin-bottom: 25px;
-    }
-    .section {
-      background: #ffffff;
+    .kpi, .section {
+      background: white;
       padding: 20px;
       border-radius: 10px;
-      margin-bottom: 25px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    }
-    select {
-      padding: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 20px;
     }
   </style>
 
@@ -42,22 +25,20 @@
     google.charts.load('current', { packages: ['table'] });
     google.charts.setOnLoadCallback(loadData);
 
-    // ================= CONFIG =================
     const SHEET_ID = "179_3BEpwPIt1kSFgQYb5SzdxkmNYVQpsyFNFN38_l-E";
     const GID = "1247592058";
-    const DATA_START_COL = 7; // Column H (0-based)
-    // ==========================================
+    const DATA_START_COL = 7; // Column H
 
-    let sheetData = null;
+    let sheetData;
 
     function loadData() {
       const query = new google.visualization.Query(
         `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}`
       );
-      query.send(response => {
-        sheetData = response.getDataTable();
+      query.send(res => {
+        sheetData = res.getDataTable();
         buildDateDropdown();
-        calculateDashboard();
+        calculate();
       });
     }
 
@@ -66,88 +47,60 @@
       select.innerHTML = "";
 
       for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
-        const option = document.createElement("option");
-        option.value = c;
-        option.text = sheetData.getColumnLabel(c);
-        select.appendChild(option);
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.text = sheetData.getColumnLabel(c);
+        select.appendChild(opt);
       }
 
-      // ✅ FORCE DEFAULT DATE (COLUMN H)
-      select.selectedIndex = 0;
+      select.selectedIndex = 0; // default = 26 Jan
     }
 
-    function calculateDashboard() {
-      const data = sheetData;
-      const selectedDateCol = parseInt(document.getElementById("dateSelect").value);
+    function calculate() {
+      const selectedDateCol = Number(document.getElementById("dateSelect").value);
 
       let totalCards = 0;
       let vleTotals = [];
       let notFilled = [];
 
-      for (let r = 0; r < data.getNumberOfRows(); r++) {
+      for (let r = 0; r < sheetData.getNumberOfRows(); r++) {
 
-        const vleName = data.getValue(r, 2);     // Column C
-        const vleContact = data.getValue(r, 3);  // Column D
+        const vleName = sheetData.getValue(r, 2);
+        const vleContact = sheetData.getValue(r, 3);
 
         let rowTotal = 0;
 
-        // ✅ TOTAL & ROW TOTAL — ALL COLUMNS FROM H ONWARDS
-        for (let c = DATA_START_COL; c < data.getNumberOfColumns(); c++) {
-          const val = data.getValue(r, c);
-          if (val !== null && val !== "") {
-            const num = Number(val);
-            if (!isNaN(num)) {
-              rowTotal += num;
-              totalCards += num;
-            }
+        // ✅ TOTAL & TOP-3 LOGIC
+        for (let c = DATA_START_COL; c < sheetData.getNumberOfColumns(); c++) {
+          const val = sheetData.getValue(r, c);
+          if (val !== null && val !== "" && !isNaN(val)) {
+            rowTotal += Number(val);
+            totalCards += Number(val);
           }
         }
 
         vleTotals.push([vleName, rowTotal]);
 
-        // ✅ NOT FILLED LOGIC (STRICT & CORRECT)
-        const checkCell = data.getValue(r, selectedDateCol);
-        const checkNum = Number(checkCell);
-
-        if (
-          checkCell === null ||
-          checkCell === "" ||
-          isNaN(checkNum)
-        ) {
+        // ✅ NOT FILLED LOGIC (FINAL & CORRECT)
+        const dateCell = sheetData.getValue(r, selectedDateCol);
+        if (dateCell === null || dateCell === "") {
           notFilled.push([vleName, vleContact]);
         }
       }
 
       document.getElementById("totalCards").innerText = totalCards;
 
-      drawTop3(vleTotals);
-      drawNotFilled(notFilled);
-    }
-
-    function drawTop3(vleTotals) {
       vleTotals.sort((a, b) => b[1] - a[1]);
-
-      const tableData = google.visualization.arrayToDataTable([
-        ["VLE Name", "Total Cards"],
-        ...vleTotals.slice(0, 3)
-      ]);
-
-      const table = new google.visualization.Table(
-        document.getElementById("top3Table")
-      );
-      table.draw(tableData, { width: "100%" });
+      drawTable("top3", ["VLE Name", "Total Cards"], vleTotals.slice(0, 3));
+      drawTable("notFilled", ["VLE Name", "Contact Number"], notFilled);
     }
 
-    function drawNotFilled(list) {
-      const tableData = google.visualization.arrayToDataTable([
-        ["VLE Name", "Contact Number"],
-        ...list
-      ]);
-
-      const table = new google.visualization.Table(
-        document.getElementById("notFilledTable")
+    function drawTable(id, headers, rows) {
+      const table = new google.visualization.Table(document.getElementById(id));
+      table.draw(
+        google.visualization.arrayToDataTable([headers, ...rows]),
+        { width: "100%" }
       );
-      table.draw(tableData, { width: "100%" });
     }
   </script>
 </head>
@@ -157,20 +110,20 @@
   <h1>📊 VLE Card Issue Dashboard</h1>
 
   <div class="kpi">
-    Total Cards Issued<br>
+    <b>Total Cards Issued</b><br>
     <span id="totalCards">0</span>
   </div>
 
   <div class="section">
     <h3>🏆 Top 3 VLEs (All Dates)</h3>
-    <div id="top3Table"></div>
+    <div id="top3"></div>
   </div>
 
   <div class="section">
     <h3>🚫 VLEs Who Did Not Fill Form</h3>
-    <label>Select Date:</label><br>
-    <select id="dateSelect" onchange="calculateDashboard()"></select>
-    <div id="notFilledTable"></div>
+    Select Date:
+    <select id="dateSelect" onchange="calculate()"></select>
+    <div id="notFilled"></div>
   </div>
 
 </body>
